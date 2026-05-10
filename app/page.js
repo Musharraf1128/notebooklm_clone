@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Sidebar from "@/components/Sidebar";
 import ChatInterface from "@/components/ChatInterface";
 import DocumentUpload from "@/components/DocumentUpload";
@@ -12,7 +12,6 @@ export default function Home() {
   const [showUpload, setShowUpload] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Load documents on mount
   useEffect(() => {
     fetchDocuments();
   }, []);
@@ -38,7 +37,6 @@ export default function Home() {
       chunkCount: result.chunkCount,
       uploadedAt: new Date().toISOString(),
     };
-
     setDocuments((prev) => [newDoc, ...prev]);
     setActiveDocument(newDoc);
     setShowUpload(false);
@@ -52,7 +50,6 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ collectionName }),
       });
-
       if (res.ok) {
         setDocuments((prev) =>
           prev.filter((d) => d.collectionName !== collectionName)
@@ -91,7 +88,6 @@ export default function Home() {
       />
 
       <main className="main-content">
-        {/* Header */}
         <header className="chat-header">
           <div className="chat-header-title">
             <button
@@ -116,28 +112,35 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Content area */}
         {activeDocument ? (
           <ChatInterface activeDocument={activeDocument} />
-        ) : showUpload ? (
-          <div className="welcome-screen">
-            <div className="welcome-icon">📤</div>
-            <h2>Upload a Document</h2>
-            <p>
-              Upload a PDF or text file to start asking questions.
-              The document will be processed through our RAG pipeline.
-            </p>
-            <DocumentUpload onUploadComplete={handleUploadComplete} />
-          </div>
         ) : (
           <div className="welcome-screen">
-            <div className="welcome-icon">📓</div>
-            <h2>NotebookLM Clone</h2>
+            <div className="welcome-icon">{showUpload ? "📤" : "📓"}</div>
+            <h2>{showUpload ? "Upload a Document" : "NotebookLM"}</h2>
             <p>
-              Upload any document and have an AI-powered conversation with it.
-              Your answers are grounded in the document&apos;s actual content — no
-              hallucination.
+              {showUpload
+                ? "Upload a PDF or text file. It will be chunked, embedded, and indexed so you can ask questions about it."
+                : "Upload any document and have an AI-powered conversation grounded in its actual content — no hallucination."}
             </p>
+
+            {!showUpload && (
+              <div className="welcome-features">
+                <div className="welcome-pill">
+                  <span>📄</span> PDF &amp; TXT
+                </div>
+                <div className="welcome-pill">
+                  <span>🧩</span> Smart Chunking
+                </div>
+                <div className="welcome-pill">
+                  <span>🔍</span> Vector Search
+                </div>
+                <div className="welcome-pill">
+                  <span>🎯</span> Grounded Answers
+                </div>
+              </div>
+            )}
+
             <DocumentUpload onUploadComplete={handleUploadComplete} />
           </div>
         )}

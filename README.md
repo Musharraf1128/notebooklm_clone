@@ -1,122 +1,127 @@
-# NotebookLM Clone — RAG-Powered Document Chat
+# NotebookLM Clone
 
 A full-stack RAG (Retrieval-Augmented Generation) application inspired by Google NotebookLM. Upload any PDF or text document and have an AI-powered conversation with it — answers are grounded in the document's actual content, not hallucinated.
 
-**🔗 Live Demo:** [Deployed on Vercel](https://notebooklm-clone.vercel.app)  
-**📂 Repository:** [GitHub](https://github.com/Musharraf1128/notebooklm_clone)
+**Live Demo:** [notebooklm-clone-ten.vercel.app](https://notebooklm-clone-ten.vercel.app)  
+**Repository:** [github.com/Musharraf1128/notebooklm_clone](https://github.com/Musharraf1128/notebooklm_clone)
 
 ---
 
-## ✨ Features
+## Features
 
-- 📄 **Upload PDF or TXT** documents
-- 🧩 **Intelligent Chunking** using Recursive Character Text Splitter
-- 🔢 **Vector Embeddings** via OpenRouter (text-embedding-3-small)
-- 🗄️ **Qdrant Cloud** vector database for storage & retrieval
-- 🤖 **LLM Generation** via OpenRouter (OpenAI-compatible)
-- 📡 **Streaming Responses** in real-time
-- 🎯 **Grounded Answers** — strictly from the document, not from LLM's general knowledge
-- 🌙 **Premium Dark UI** with glassmorphism and micro-animations
-- 📱 **Responsive** — works on desktop and mobile
+- Upload **PDF** or **TXT** documents
+- Intelligent chunking using **Recursive Character Text Splitter**
+- Vector embeddings via OpenRouter (`text-embedding-3-small`)
+- **Qdrant Cloud** vector database for persistent storage and retrieval
+- LLM generation via **OpenRouter** (OpenAI-compatible API)
+- Real-time **streaming responses**
+- Strictly **grounded answers** — the LLM only answers from the document, not from its general knowledge
+- Responsive dark-themed UI
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
-│   Frontend   │────▶│  Next.js API  │────▶│  OpenRouter API  │
-│  (React UI)  │◀────│   Routes      │◀────│  (Embeddings +   │
-└─────────────┘     └──────┬───────┘     │   LLM Chat)      │
-                           │              └─────────────────┘
-                           │
-                     ┌─────▼──────┐
-                     │ Qdrant     │
-                     │ Cloud      │
-                     │ (Vectors)  │
-                     └────────────┘
+┌─────────────┐      ┌──────────────┐      ┌─────────────────┐
+│   Frontend  │────> │  Next.js API │────> │  OpenRouter API │
+│  (React UI) │<──── │   Routes     │<──── │  (Embeddings +  │
+└─────────────┘      └──────┬───────┘      │   LLM Chat)     │
+                            │              └─────────────────┘
+                            │
+                      ┌─────▼──────┐
+                      │  Qdrant    │
+                      │  Cloud     │
+                      │  (Vectors) │
+                      └────────────┘
 ```
 
 ---
 
-## 🔄 RAG Pipeline
+## RAG Pipeline
 
-The complete pipeline that runs end-to-end:
+The full pipeline runs end-to-end on every interaction:
 
 ### 1. Ingestion
-User uploads a PDF or TXT file through the web UI.
+The user uploads a PDF or TXT file through the web interface.
 
 ### 2. Parsing
-- **PDF**: Parsed using `pdf-parse` to extract raw text
-- **TXT**: Read directly as UTF-8 text
+- **PDF** — Text is extracted server-side using `pdf-parse`
+- **TXT** — Read directly as UTF-8 text
 
-### 3. Chunking Strategy ⭐
+### 3. Chunking Strategy
 
-> **Recursive Character Text Splitter** — the primary chunking strategy.
+**Recursive Character Text Splitter** is used as the primary chunking strategy.
 
-This strategy splits text hierarchically using a cascade of separators:
+The algorithm splits text hierarchically using a cascade of separators, falling back to finer-grained splits only when necessary:
 
 ```
-Separator Priority: "\n\n" → "\n" → ". " → " " → ""
+Separator Priority:  "\n\n"  →  "\n"  →  ". "  →  " "  →  ""
 ```
 
 **How it works:**
-1. First, try to split by paragraph breaks (`\n\n`)
-2. If any chunk is still too large, fall back to line breaks (`\n`)
-3. Continue down to sentence boundaries (`. `), then words (` `)
-4. Last resort: split by individual characters
 
-**Parameters:**
-- `chunkSize`: 1000 characters (max per chunk)
-- `chunkOverlap`: 200 characters (overlap between consecutive chunks)
+1. Attempt to split by paragraph breaks (`\n\n`).
+2. If any resulting chunk exceeds the maximum size, fall back to line breaks (`\n`).
+3. Continue down to sentence boundaries (`. `), then word boundaries (` `).
+4. As a last resort, split by individual characters.
+
+**Configuration:**
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| `chunkSize` | 1000 characters | Maximum length per chunk |
+| `chunkOverlap` | 200 characters | Overlap between consecutive chunks |
 
 **Why this strategy:**
-- **Preserves semantic coherence** — paragraphs stay together when possible
-- **Handles varied document structures** — works with code, prose, lists, tables
-- **Configurable** — chunk size and overlap can be tuned for different use cases
-- **Overlap prevents context loss** — important information at chunk boundaries is captured in adjacent chunks
+
+- **Preserves semantic coherence** — paragraphs and logical units stay together when possible.
+- **Handles varied structures** — works correctly with prose, code, lists, and tables.
+- **Configurable** — chunk size and overlap can be tuned per use case.
+- **Overlap prevents context loss** — important information at chunk boundaries is captured in adjacent chunks.
 
 ### 4. Embedding
 Each chunk is converted to a 1536-dimensional vector using OpenRouter's `text-embedding-3-small` model.
 
 ### 5. Storage
-Vectors and their associated text are stored in **Qdrant Cloud** (free tier) — a production-grade vector database with cosine similarity indexing.
+Vectors and their associated text payloads are stored in **Qdrant Cloud** — a production-grade vector database with cosine similarity indexing.
 
 ### 6. Retrieval
 When a user asks a question:
-1. The query is embedded using the same model
-2. Qdrant performs cosine similarity search
-3. Top 5 most relevant chunks are retrieved
+1. The query is embedded using the same embedding model.
+2. Qdrant performs a cosine similarity search across the stored vectors.
+3. The top 5 most relevant chunks are returned.
 
 ### 7. Generation
-The retrieved chunks are injected into the LLM prompt as context. The system prompt enforces:
-- Only answer from the provided context
-- If the answer isn't in the document, say so
-- Cite source sections when possible
+The retrieved chunks are injected into the LLM system prompt as context. The prompt strictly enforces:
+- Answer only from the provided document context.
+- If the answer is not in the document, state that clearly.
+- Cite the relevant source sections where possible.
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Component | Technology |
 |-----------|-----------|
-| Framework | Next.js 14 (App Router) |
+| Framework | Next.js (App Router) |
 | Language | JavaScript |
 | LLM Provider | OpenRouter (OpenAI-compatible) |
-| Embeddings | text-embedding-3-small via OpenRouter |
-| Vector DB | Qdrant Cloud (free tier) |
-| PDF Parsing | pdf-parse |
-| Styling | Vanilla CSS (dark theme) |
+| Embeddings | `text-embedding-3-small` via OpenRouter |
+| Vector Database | Qdrant Cloud (free tier) |
+| PDF Parsing | `pdf-parse` |
+| Styling | Vanilla CSS |
 | Deployment | Vercel |
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
+
 - Node.js 18+
-- OpenRouter API key ([get one here](https://openrouter.ai))
-- Qdrant Cloud account ([free signup](https://cloud.qdrant.io))
+- [OpenRouter](https://openrouter.ai) API key
+- [Qdrant Cloud](https://cloud.qdrant.io) account (free tier — no credit card required)
 
 ### Local Development
 
@@ -131,11 +136,11 @@ The retrieved chunks are injected into the LLM prompt as context. The system pro
    npm install
    ```
 
-3. **Set up environment variables:**
+3. **Configure environment variables:**
    ```bash
    cp .env.example .env.local
    ```
-   Fill in your API keys in `.env.local`:
+   Edit `.env.local` with your credentials:
    ```
    QUADRANT_CLUSTER_END_POINT=https://your-cluster.cloud.qdrant.io
    QUADRANT_API_KEY=your_qdrant_api_key
@@ -143,68 +148,68 @@ The retrieved chunks are injected into the LLM prompt as context. The system pro
    OPENROUTER_MODEL=openai/gpt-4.1-mini
    ```
 
-4. **Run the dev server:**
+4. **Start the development server:**
    ```bash
    npm run dev
    ```
 
-5. **Open** [http://localhost:3000](http://localhost:3000)
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### Deploy to Vercel
+### Deploying to Vercel
 
-1. Push your code to GitHub
-2. Import the project in [Vercel](https://vercel.com)
-3. Add the environment variables in the Vercel dashboard
-4. Deploy!
+1. Push the repository to GitHub.
+2. Import the project at [vercel.com](https://vercel.com).
+3. Add the four environment variables in the Vercel project settings.
+4. Deploy.
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 notebooklm_clone/
 ├── app/
 │   ├── layout.js              # Root layout with meta tags
 │   ├── page.js                # Main page component
-│   ├── globals.css            # Design system & styles
+│   ├── globals.css            # Design system and styles
 │   └── api/
-│       ├── upload/route.js    # File upload + RAG ingestion
-│       ├── chat/route.js      # Query + retrieval + generation
-│       └── documents/route.js # List & delete documents
+│       ├── upload/route.js    # File upload and RAG ingestion pipeline
+│       ├── chat/route.js      # Query, retrieval, and generation
+│       └── documents/route.js # List and delete document collections
 ├── components/
 │   ├── Sidebar.jsx            # Document list panel
-│   ├── DocumentUpload.jsx     # Drag-and-drop upload
-│   ├── ChatInterface.jsx      # Chat with streaming
-│   └── MessageBubble.jsx      # Message rendering + sources
+│   ├── DocumentUpload.jsx     # Drag-and-drop file upload
+│   ├── ChatInterface.jsx      # Chat interface with streaming
+│   └── MessageBubble.jsx      # Message rendering with source citations
 ├── lib/
-│   ├── chunker.js             # Recursive text splitter
-│   ├── embeddings.js          # OpenRouter embeddings
-│   ├── vectorStore.js         # Qdrant Cloud client
-│   ├── openrouter.js          # LLM generation
-│   └── documentProcessor.js   # PDF/TXT parsing
-├── .env.example               # Environment template
+│   ├── chunker.js             # Recursive Character Text Splitter
+│   ├── embeddings.js          # OpenRouter embeddings client
+│   ├── vectorStore.js         # Qdrant Cloud client wrapper
+│   ├── openrouter.js          # LLM generation module
+│   └── documentProcessor.js   # PDF and TXT parsing
+├── .env.example               # Environment variable template
 ├── next.config.mjs            # Next.js configuration
-└── README.md                  # This file
+└── README.md
 ```
 
 ---
 
-## 📋 Assignment Checklist
+## Assignment Checklist
 
 | Requirement | Status |
 |-------------|--------|
-| Working web application | ✅ |
-| Document upload (PDF & TXT) | ✅ |
-| Full RAG pipeline (ingest → chunk → embed → store → retrieve → generate) | ✅ |
-| Chunking strategy documented | ✅ Recursive Character Text Splitter |
-| Vector database used | ✅ Qdrant Cloud |
-| LLM uses retrieved context (not memory) | ✅ Strict system prompt |
-| Handles unseen documents | ✅ |
-| GitHub repository (public) | ✅ |
-| Live deployed link | ✅ Vercel |
+| Working web application | Done |
+| Document upload (PDF and TXT) | Done |
+| Full RAG pipeline (ingest, chunk, embed, store, retrieve, generate) | Done |
+| Chunking strategy implemented and documented | Done — Recursive Character Text Splitter |
+| Vector database used | Done — Qdrant Cloud |
+| LLM uses retrieved context, not general knowledge | Done — strict system prompt |
+| Handles unseen documents correctly | Done |
+| Public GitHub repository | Done |
+| Live deployed link | Done — Vercel |
 
 ---
 
-## 👤 Author
+## Author
 
 **Musharraf** — [GitHub](https://github.com/Musharraf1128)
