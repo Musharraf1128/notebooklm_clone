@@ -1,20 +1,9 @@
-/**
- * Chat API Route
- * 
- * Handles user queries with full RAG retrieval + generation:
- * 1. Embed the user's query
- * 2. Search Qdrant for the most relevant chunks
- * 3. Generate a grounded answer using the LLM
- * 4. Stream the response back to the client
- */
-
-import { embedQuery } from "@/lib/embeddings";
-import { search } from "@/lib/vectorStore";
 import { generateStreamingAnswer } from "@/lib/openrouter";
+import { runRetrievalPipeline } from "@/lib/ragPipeline";
 
 export async function POST(request) {
   try {
-    const { query, collectionName, chatHistory } = await request.json();
+    const { query, collectionName, chatHistory, ragConfig } = await request.json();
 
     if (!query || !collectionName) {
       return new Response(
@@ -23,40 +12,43 @@ export async function POST(request) {
       );
     }
 
-    // Step 1: Embed the user's query
-    const queryVector = await embedQuery(query);
+    // Run the retrieval pipeline (query rewrite, sub-query, hyde, rerank, corrective)
+    const { chunks, pipelineLog, refinedQuery } = await runRetrievalPipeline({
+      query,
+      collectionName,
+      chatHistory: chatHistory || [],
+      config: ragConfig || {},
+    });
 
-    // Step 2: Search Qdrant for relevant chunks (top 5)
-    const relevantChunks = await search(collectionName, queryVector, 5);
-
-    if (relevantChunks.length === 0) {
+    if (chunks.length === 0) {
       return new Response(
-        JSON.stringify({
-          error: "No relevant content found in the document",
-        }),
+        JSON.stringify({ error: "No relevant content found in the document" }),
         { status: 404, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // Step 3: Generate streaming answer using retrieved context
+    // Generate streaming answer using retrieved chunks
     const stream = generateStreamingAnswer(
-      query,
-      relevantChunks,
+      refinedQuery || query,
+      chunks,
       chatHistory || []
     );
 
-    // Return as a streaming response
     return new Response(stream, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Transfer-Encoding": "chunked",
         "X-Sources": JSON.stringify(
-          relevantChunks.map((c) => ({
-            text: c.text.slice(0, 200) + "...",
-            score: c.score,
-            chunkIndex: c.metadata.chunkIndex,
+          chunks.map((c) => ({
+            text: (c.text || "").slice(0, 200) + "...",
+            score: c.score || c.rerankScore / 10 || 0,
+            chunkIndex: c.metadata?.chunkIndex ?? 0,
           }))
         ),
+        "X-Pipeline-Log": JSON.stringify(
+          pipelineLog.map((e) => ({ step: e.step, ...e }))
+        ),
+        "X-Refined-Query": encodeURIComponent(refinedQuery || query),
       },
     });
   } catch (error) {

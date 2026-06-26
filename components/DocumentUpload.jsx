@@ -9,6 +9,13 @@ const UPLOAD_STEPS = [
   { id: "storing", label: "Storing" },
 ];
 
+const CHUNK_STRATEGIES = [
+  { value: "recursive", label: "Recursive Character", desc: "Hierarchical split by paragraphs → lines → sentences" },
+  { value: "fixed", label: "Fixed Size", desc: "Simple character-count split with overlap" },
+  { value: "sentence", label: "Sentence-Based", desc: "Split at sentence boundaries, slide by sentences" },
+  { value: "semantic", label: "Semantic", desc: "Embedding-based topic boundary detection" },
+];
+
 export default function DocumentUpload({ onUploadComplete, inline = false }) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -16,6 +23,10 @@ export default function DocumentUpload({ onUploadComplete, inline = false }) {
   const [currentStep, setCurrentStep] = useState("");
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [chunkStrategy, setChunkStrategy] = useState("recursive");
+  const [chunkSize, setChunkSize] = useState(1000);
+  const [chunkOverlap, setChunkOverlap] = useState(200);
   const fileInputRef = useRef(null);
 
   const handleDragOver = (e) => {
@@ -37,12 +48,10 @@ export default function DocumentUpload({ onUploadComplete, inline = false }) {
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) handleFileUpload(file);
-    // Reset input so same file can be re-uploaded
     e.target.value = "";
   };
 
   const handleFileUpload = async (file) => {
-    // Validate file type
     const validTypes = ["application/pdf", "text/plain"];
     const validExts = ["pdf", "txt"];
     const ext = file.name.split(".").pop().toLowerCase();
@@ -53,7 +62,6 @@ export default function DocumentUpload({ onUploadComplete, inline = false }) {
       return;
     }
 
-    // Validate file size (10MB)
     if (file.size > 10 * 1024 * 1024) {
       setError("File size exceeds 10MB limit");
       setTimeout(() => setError(""), 4000);
@@ -64,7 +72,6 @@ export default function DocumentUpload({ onUploadComplete, inline = false }) {
     setFileName(file.name);
     setError("");
 
-    // Simulate step progress
     const steps = ["parsing", "chunking", "embedding", "storing"];
     let progressValue = 0;
 
@@ -83,6 +90,9 @@ export default function DocumentUpload({ onUploadComplete, inline = false }) {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("chunkingStrategy", chunkStrategy);
+      formData.append("chunkSize", String(chunkSize));
+      formData.append("chunkOverlap", String(chunkOverlap));
 
       const response = await fetch("/api/upload", {
         method: "POST",
@@ -101,7 +111,6 @@ export default function DocumentUpload({ onUploadComplete, inline = false }) {
       setProgress(100);
       setCurrentStep("done");
 
-      // Brief delay to show completion
       setTimeout(() => {
         setUploading(false);
         setProgress(0);
@@ -147,6 +156,65 @@ export default function DocumentUpload({ onUploadComplete, inline = false }) {
           id="file-upload-input"
         />
       </div>
+
+      <button
+        className="rag-toggle-btn"
+        onClick={() => setShowAdvanced(!showAdvanced)}
+        type="button"
+      >
+        <span>{showAdvanced ? "▼" : "▶"}</span>
+        Advanced Chunking Settings
+      </button>
+
+      {showAdvanced && (
+        <div className="rag-settings-panel">
+          <div className="rag-setting-row">
+            <label className="rag-setting-label">Chunking Strategy</label>
+            <select
+              className="rag-setting-select"
+              value={chunkStrategy}
+              onChange={(e) => setChunkStrategy(e.target.value)}
+            >
+              {CHUNK_STRATEGIES.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+            <p className="rag-setting-desc">
+              {CHUNK_STRATEGIES.find(s => s.value === chunkStrategy)?.desc}
+            </p>
+          </div>
+
+          <div className="rag-setting-row">
+            <label className="rag-setting-label">
+              Chunk Size: {chunkSize} chars
+            </label>
+            <input
+              type="range"
+              className="rag-setting-slider"
+              min={200}
+              max={2000}
+              step={100}
+              value={chunkSize}
+              onChange={(e) => setChunkSize(Number(e.target.value))}
+            />
+          </div>
+
+          <div className="rag-setting-row">
+            <label className="rag-setting-label">
+              Overlap: {chunkOverlap} chars
+            </label>
+            <input
+              type="range"
+              className="rag-setting-slider"
+              min={0}
+              max={500}
+              step={50}
+              value={chunkOverlap}
+              onChange={(e) => setChunkOverlap(Number(e.target.value))}
+            />
+          </div>
+        </div>
+      )}
 
       {uploading && (
         <div className="upload-progress">

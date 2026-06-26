@@ -10,12 +10,14 @@ A full-stack RAG (Retrieval-Augmented Generation) application inspired by Google
 ## Features
 
 - Upload **PDF** or **TXT** documents
-- Intelligent chunking using **Recursive Character Text Splitter**
+- **4 chunking strategies**: Recursive Character, Fixed Size, Sentence-Based, Semantic
 - Vector embeddings via OpenRouter (`text-embedding-3-small`)
 - **Qdrant Cloud** vector database for persistent storage and retrieval
 - LLM generation via **OpenRouter** (OpenAI-compatible API)
 - Real-time **streaming responses**
 - Strictly **grounded answers** — the LLM only answers from the document, not from its general knowledge
+- **Advanced RAG techniques**: Query Rewriting, Query Expansion, Sub-Query Enhancement, HyDE, LLM Re-Ranking, Corrective RAG with LLM Judges
+- Configurable RAG pipeline with on/off toggles per technique
 - Responsive dark-themed UI
 
 ---
@@ -194,6 +196,24 @@ notebooklm_clone/
 
 ---
 
+## Advanced RAG Techniques
+
+See **[ADVANCED_RAG_TECHNIQUES.md](./ADVANCED_RAG_TECHNIQUES.md)** for comprehensive documentation on all implemented advanced RAG techniques:
+
+- What is RAG and why it exists
+- RAG vs fine-tuning decision framework
+- Vector databases comparison (Qdrant, Pinecone, Chroma)
+- Embeddings & indexing explained
+- 4 chunking strategies with tradeoffs
+- Query rewriting using SLMs
+- LLM-as-Judge for relevance & faithfulness
+- Sub-query decomposition with RRF fusion
+- Corrective RAG with self-evaluation loops
+- HyDE (Hypothetical Document Embeddings)
+- Cross-encoder style re-ranking
+- Context window & token optimization
+- Chunk size & overlap tradeoffs
+
 ## Assignment Checklist
 
 | Requirement | Status |
@@ -201,10 +221,11 @@ notebooklm_clone/
 | Working web application | Done |
 | Document upload (PDF and TXT) | Done |
 | Full RAG pipeline (ingest, chunk, embed, store, retrieve, generate) | Done |
-| Chunking strategy implemented and documented | Done — Recursive Character Text Splitter |
+| Chunking strategy implemented and documented | Done — 4 strategies: recursive, fixed, sentence, semantic |
 | Vector database used | Done — Qdrant Cloud |
 | LLM uses retrieved context, not general knowledge | Done — strict system prompt |
 | Handles unseen documents correctly | Done |
+| Advanced RAG techniques implemented | Done — query rewrite, sub-query, HyDE, rerank, corrective, LLM judge |
 | Public GitHub repository | Done |
 | Live deployed link | Done — Vercel |
 

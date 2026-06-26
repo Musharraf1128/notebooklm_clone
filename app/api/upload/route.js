@@ -1,26 +1,20 @@
-/**
- * Upload API Route
- * 
- * Handles document upload and full RAG ingestion pipeline:
- * 1. Parse the uploaded file (PDF or TXT)
- * 2. Chunk the text using Recursive Character Text Splitter
- * 3. Generate embeddings via OpenRouter
- * 4. Store vectors in Qdrant Cloud
- */
-
 import { NextResponse } from "next/server";
 import { processFile } from "@/lib/documentProcessor";
 import { chunkDocument } from "@/lib/chunker";
 import { embedTexts } from "@/lib/embeddings";
 import { createCollection, upsertVectors } from "@/lib/vectorStore";
 
-// Max file size: 10MB
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+const VALID_STRATEGIES = ["recursive", "fixed", "sentence", "semantic"];
 
 export async function POST(request) {
   try {
     const formData = await request.formData();
     const file = formData.get("file");
+    const chunkingStrategy = formData.get("chunkingStrategy") || "recursive";
+    const chunkSize = parseInt(formData.get("chunkSize") || "1000", 10);
+    const chunkOverlap = parseInt(formData.get("chunkOverlap") || "200", 10);
 
     if (!file) {
       return NextResponse.json(
@@ -29,7 +23,6 @@ export async function POST(request) {
       );
     }
 
-    // Validate file type
     const allowedTypes = ["application/pdf", "text/plain"];
     const fileExtension = file.name.split(".").pop().toLowerCase();
     const isAllowed =
@@ -43,10 +36,16 @@ export async function POST(request) {
       );
     }
 
-    // Validate file size
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
         { error: "File size exceeds 10MB limit" },
+        { status: 400 }
+      );
+    }
+
+    if (!VALID_STRATEGIES.includes(chunkingStrategy)) {
+      return NextResponse.json(
+        { error: `Invalid chunking strategy. Must be one of: ${VALID_STRATEGIES.join(", ")}` },
         { status: 400 }
       );
     }
@@ -63,13 +62,28 @@ export async function POST(request) {
       );
     }
 
-    // Step 2: Chunk the document
-    const chunks = chunkDocument(parsedDoc.text, file.name, {
-      chunkSize: 1000,
-      chunkOverlap: 200,
-    });
+    // Step 2: Chunk the document (supports strategy selection)
+    let chunks;
+    if (chunkingStrategy === "semantic") {
+      chunks = await chunkDocument(parsedDoc.text, file.name, {
+        strategy: chunkingStrategy,
+        chunkSize,
+        chunkOverlap,
+      });
+    } else {
+      chunks = chunkDocument(parsedDoc.text, file.name, {
+        strategy: chunkingStrategy,
+        chunkSize,
+        chunkOverlap,
+      });
+    }
 
-    if (chunks.length === 0) {
+    // Handle both sync and async chunkDocument returns
+    if (chunks instanceof Promise) {
+      chunks = await chunks;
+    }
+
+    if (!chunks || chunks.length === 0) {
       return NextResponse.json(
         { error: "Document produced no chunks after processing" },
         { status: 400 }
@@ -81,7 +95,6 @@ export async function POST(request) {
     const embeddings = await embedTexts(texts);
 
     // Step 4: Store in Qdrant
-    // Create a unique collection name from the filename
     const sanitizedName = file.name
       .replace(/[^a-zA-Z0-9]/g, "_")
       .replace(/_+/g, "_")
@@ -101,6 +114,9 @@ export async function POST(request) {
       chunkCount: chunks.length,
       numPages: parsedDoc.numPages,
       info: parsedDoc.info,
+      chunkingStrategy,
+      chunkSize,
+      chunkOverlap,
     });
   } catch (error) {
     console.error("Upload error:", error);
