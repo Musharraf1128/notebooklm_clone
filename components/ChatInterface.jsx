@@ -13,19 +13,18 @@ const RAG_SETTINGS_DEFAULT = {
 };
 
 const RAG_SETTINGS_DEFINITIONS = [
-  { key: "queryRewrite", label: "Query Rewriting", desc: "Rewrite ambiguous queries into standalone questions using SLM" },
-  { key: "queryExpansion", label: "Query Expansion", desc: "Generate alternative phrasings for multi-vector retrieval" },
-  { key: "subQuery", label: "Sub-Query Enhancement", desc: "Decompose complex queries, retrieve per sub-query, RRF merge" },
-  { key: "hyde", label: "HyDE", desc: "Hypothetical Document Embeddings — generate ideal passage, embed that" },
-  { key: "rerank", label: "Re-Ranking", desc: "LLM-based cross-encoder re-ranking of search results" },
-  { key: "corrective", label: "Corrective RAG", desc: "Self-evaluate retrieval/generation quality, re-retrieve if poor" },
+  { key: "queryRewrite", label: "Query Rewriting", desc: "Rewrite ambiguous queries using SLM" },
+  { key: "queryExpansion", label: "Query Expansion", desc: "Generate alternative phrasings" },
+  { key: "subQuery", label: "Sub-Query", desc: "Decompose and merge complex queries" },
+  { key: "hyde", label: "HyDE", desc: "Hypothetical Document Embeddings" },
+  { key: "rerank", label: "Re-Ranking", desc: "Cross-encoder re-ranking of results" },
+  { key: "corrective", label: "Corrective RAG", desc: "Self-evaluate and re-retrieve" },
 ];
 
-export default function ChatInterface({ activeDocument }) {
+export default function ChatInterface({ activeDocument, ragSettingsOpen, onToggleRagSettings }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [showRagSettings, setShowRagSettings] = useState(false);
   const [ragConfig, setRagConfig] = useState(RAG_SETTINGS_DEFAULT);
   const [pipelineLog, setPipelineLog] = useState(null);
   const messagesEndRef = useRef(null);
@@ -51,12 +50,7 @@ export default function ChatInterface({ activeDocument }) {
     const query = input.trim();
     if (!query || isStreaming || !activeDocument) return;
 
-    const userMessage = {
-      id: Date.now(),
-      role: "user",
-      content: query,
-    };
-
+    const userMessage = { id: Date.now(), role: "user", content: query };
     const assistantMessage = {
       id: Date.now() + 1,
       role: "assistant",
@@ -92,17 +86,15 @@ export default function ChatInterface({ activeDocument }) {
 
       let sources = [];
       try {
-        const sourcesHeader = response.headers.get("X-Sources");
-        if (sourcesHeader) {
-          sources = JSON.parse(sourcesHeader);
-        }
+        const h = response.headers.get("X-Sources");
+        if (h) sources = JSON.parse(h);
       } catch (e) {}
 
       let log = null;
       try {
-        const logHeader = response.headers.get("X-Pipeline-Log");
-        if (logHeader) {
-          log = JSON.parse(logHeader);
+        const h = response.headers.get("X-Pipeline-Log");
+        if (h) {
+          log = JSON.parse(h);
           setPipelineLog(log);
         }
       } catch (e) {}
@@ -114,10 +106,7 @@ export default function ChatInterface({ activeDocument }) {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
-        const text = decoder.decode(value, { stream: true });
-        fullContent += text;
-
+        fullContent += decoder.decode(value, { stream: true });
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === assistantMessage.id
@@ -138,11 +127,7 @@ export default function ChatInterface({ activeDocument }) {
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantMessage.id
-            ? {
-                ...msg,
-                content: `⚠️ Error: ${error.message}`,
-                streaming: false,
-              }
+            ? { ...msg, content: `Error: ${error.message}`, streaming: false }
             : msg
         )
       );
@@ -161,14 +146,18 @@ export default function ChatInterface({ activeDocument }) {
   return (
     <>
       <div className="chat-messages">
-        {messages.length === 0 && activeDocument && (
-          <div className="welcome-screen" style={{ padding: "40px 20px" }}>
-            <div className="welcome-icon" style={{ width: 56, height: 56, fontSize: 24, marginBottom: 16 }}>💬</div>
-            <h2 style={{ fontSize: 22 }}>Start a Conversation</h2>
-            <p style={{ fontSize: 14 }}>
-              Ask any question about <strong>{activeDocument.fileName}</strong>.
-              Answers will be grounded in the document&apos;s content.
-            </p>
+        {messages.length === 0 && (
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flex: 1,
+            color: "var(--text-muted)",
+            fontSize: 13.5,
+            textAlign: "center",
+            padding: 40,
+          }}>
+            Ask a question about <strong>&nbsp;{activeDocument?.fileName}</strong>
           </div>
         )}
 
@@ -179,48 +168,38 @@ export default function ChatInterface({ activeDocument }) {
       </div>
 
       <div className="chat-input-container">
-        <div className="rag-settings-bar">
-          <button
-            className="rag-toggle-btn"
-            onClick={() => setShowRagSettings(!showRagSettings)}
-            type="button"
-          >
-            <span>{showRagSettings ? "▼" : "▶"}</span>
-            Advanced RAG Settings
-            <span className="rag-active-count">
-              {Object.values(ragConfig).filter(Boolean).length} active
-            </span>
-          </button>
-        </div>
-
-        {showRagSettings && (
-          <div className="rag-settings-panel" style={{ maxWidth: 780, margin: "0 auto 12px" }}>
-            {RAG_SETTINGS_DEFINITIONS.map((setting) => (
-              <label key={setting.key} className="rag-setting-checkbox-row">
-                <div className="rag-setting-checkbox-info">
+        {ragSettingsOpen && (
+          <div className="rag-settings-bar" style={{ marginBottom: 8 }}>
+            <div className="rag-settings-panel">
+              {RAG_SETTINGS_DEFINITIONS.map((setting) => (
+                <label key={setting.key} className="rag-setting-row">
                   <input
                     type="checkbox"
                     checked={ragConfig[setting.key]}
                     onChange={() => toggleRagSetting(setting.key)}
                   />
-                  <span className="rag-setting-checkbox-label">{setting.label}</span>
-                  <span className="rag-setting-checkbox-desc">{setting.desc}</span>
-                </div>
-              </label>
-            ))}
+                  <span className="rag-setting-label">{setting.label}</span>
+                  <span className="rag-setting-desc">{setting.desc}</span>
+                </label>
+              ))}
+            </div>
           </div>
         )}
 
         {pipelineLog && (
-          <div className="rag-pipeline-status" style={{ maxWidth: 780, margin: "0 auto 8px" }}>
-            {pipelineLog.filter(e => e.step === "rewritten" || e.step === "reranked" || e.step === "retrieval_evaluation" || e.step === "generation_evaluation").map((e, i) => (
-              <span key={i} className="rag-pipeline-chip">
-                {e.step === "rewritten" && "✏️ Rewritten"}
-                {e.step === "reranked" && "🔀 Re-ranked"}
-                {e.step === "retrieval_evaluation" && `📊 Retrieval: ${e.avgRelevance?.toFixed(1) || "?"}/10`}
-                {e.step === "generation_evaluation" && `✅ Faithfulness: ${e.details?.faithfulness || "?"}/10`}
-              </span>
-            ))}
+          <div className="rag-pipeline-status" style={{ marginBottom: 6 }}>
+            {pipelineLog
+              .filter((e) =>
+                ["rewritten", "reranked", "retrieval_evaluation", "generation_evaluation"].includes(e.step)
+              )
+              .map((e, i) => (
+                <span key={i} className="rag-pipeline-chip">
+                  {e.step === "rewritten" && `Rewritten`}
+                  {e.step === "reranked" && `Re-ranked (${e.topScore || "?"})`}
+                  {e.step === "retrieval_evaluation" && `Relevance: ${e.avgRelevance?.toFixed(1) || "?"}`}
+                  {e.step === "generation_evaluation" && `Faithfulness: ${e.details?.faithfulness || "?"}`}
+                </span>
+              ))}
           </div>
         )}
 
@@ -238,13 +217,11 @@ export default function ChatInterface({ activeDocument }) {
             }
             disabled={!activeDocument || isStreaming}
             rows={1}
-            id="chat-input"
           />
           <button
             className="chat-send-btn"
             onClick={handleSend}
             disabled={!input.trim() || isStreaming || !activeDocument}
-            id="chat-send-btn"
           >
             ➤
           </button>

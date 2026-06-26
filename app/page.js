@@ -8,9 +8,10 @@ import DocumentUpload from "@/components/DocumentUpload";
 export default function Home() {
   const [documents, setDocuments] = useState([]);
   const [activeDocument, setActiveDocument] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [ragSettingsOpen, setRagSettingsOpen] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
@@ -40,7 +41,6 @@ export default function Home() {
     setDocuments((prev) => [newDoc, ...prev]);
     setActiveDocument(newDoc);
     setShowUpload(false);
-    setSidebarOpen(false);
   };
 
   const handleDeleteDocument = async (collectionName) => {
@@ -66,85 +66,102 @@ export default function Home() {
   const handleSelectDocument = (doc) => {
     setActiveDocument(doc);
     setShowUpload(false);
-    setSidebarOpen(false);
-  };
-
-  const handleUploadClick = () => {
-    setShowUpload(true);
-    setActiveDocument(null);
-    setSidebarOpen(false);
   };
 
   return (
     <div className="app-layout">
-      <Sidebar
-        documents={documents}
-        activeDocument={activeDocument}
-        onSelectDocument={handleSelectDocument}
-        onDeleteDocument={handleDeleteDocument}
-        onUploadClick={handleUploadClick}
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
+      {sidebarOpen && (
+        <div
+          className="sidebar-overlay active"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <div className={`sidebar${sidebarOpen ? " open" : ""}`}>
+        <Sidebar
+          documents={documents}
+          activeDocument={activeDocument}
+          onSelectDocument={handleSelectDocument}
+          onDeleteDocument={handleDeleteDocument}
+          onUploadClick={() => {
+            setShowUpload(true);
+            setSidebarOpen(false);
+          }}
+        />
+      </div>
 
       <main className="main-content">
-        <header className="chat-header">
-          <div className="chat-header-title">
+        <header className="app-header">
+          <div className="app-header-left">
             <button
-              className="mobile-menu-btn"
-              onClick={() => setSidebarOpen(true)}
+              className="header-btn"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              style={{ display: "none" }}
               id="mobile-menu-btn"
             >
               ☰
             </button>
-            <h2>
-              {activeDocument
-                ? "Chat"
-                : showUpload
-                ? "Upload Document"
-                : "Welcome"}
-            </h2>
+            <span className="app-header-title">
+              {activeDocument ? "Chat" : "NotebookLM"}
+            </span>
+          </div>
+
+          <div className="app-header-center">
             {activeDocument && (
-              <span className="chat-header-doc">
-                {activeDocument.fileName}
-              </span>
+              <span className="app-header-doc">{activeDocument.fileName}</span>
             )}
+          </div>
+
+          <div className="app-header-right">
+            <button
+              className={`header-btn ${ragSettingsOpen ? "active" : ""}`}
+              onClick={() => setRagSettingsOpen(!ragSettingsOpen)}
+            >
+              RAG Settings
+            </button>
+            <button
+              className="header-btn primary"
+              onClick={() => setShowUpload(true)}
+            >
+              + Upload
+            </button>
           </div>
         </header>
 
         {activeDocument ? (
-          <ChatInterface activeDocument={activeDocument} />
+          <ChatInterface
+            activeDocument={activeDocument}
+            ragSettingsOpen={ragSettingsOpen}
+            onToggleRagSettings={() => setRagSettingsOpen(!ragSettingsOpen)}
+          />
         ) : (
           <div className="welcome-screen">
-            <div className="welcome-icon">{showUpload ? "📤" : "📓"}</div>
-            <h2>{showUpload ? "Upload a Document" : "NotebookLM"}</h2>
-            <p>
-              {showUpload
-                ? "Upload a PDF or text file. It will be chunked, embedded, and indexed so you can ask questions about it."
-                : "Upload any document and have an AI-powered conversation grounded in its actual content — no hallucination."}
-            </p>
-
-            {!showUpload && (
-              <div className="welcome-features">
-                <div className="welcome-pill">
-                  <span>📄</span> PDF &amp; TXT
-                </div>
-                <div className="welcome-pill">
-                  <span>🧩</span> Smart Chunking
-                </div>
-                <div className="welcome-pill">
-                  <span>🔍</span> Vector Search
-                </div>
-                <div className="welcome-pill">
-                  <span>🎯</span> Grounded Answers
-                </div>
+            <div className="welcome-content">
+              <div className="welcome-icon">📓</div>
+              <h2>NotebookLM</h2>
+              <p>
+                Upload a PDF or text document and ask questions about it.
+                Answers are grounded in your document&apos;s content — no hallucination.
+              </p>
+              <div className="welcome-actions">
+                <button
+                  className="header-btn primary"
+                  onClick={() => setShowUpload(true)}
+                >
+                  + Upload a Document
+                </button>
               </div>
-            )}
-
-            <DocumentUpload onUploadComplete={handleUploadComplete} />
+            </div>
           </div>
         )}
       </main>
+
+      {showUpload && (
+        <DocumentUpload
+          onClose={() => setShowUpload(false)}
+          onUploadComplete={handleUploadComplete}
+        />
+      )}
     </div>
   );
 }

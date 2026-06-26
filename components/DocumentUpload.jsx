@@ -10,20 +10,20 @@ const UPLOAD_STEPS = [
 ];
 
 const CHUNK_STRATEGIES = [
-  { value: "recursive", label: "Recursive Character", desc: "Hierarchical split by paragraphs → lines → sentences" },
-  { value: "fixed", label: "Fixed Size", desc: "Simple character-count split with overlap" },
-  { value: "sentence", label: "Sentence-Based", desc: "Split at sentence boundaries, slide by sentences" },
-  { value: "semantic", label: "Semantic", desc: "Embedding-based topic boundary detection" },
+  { value: "recursive", label: "Recursive Character" },
+  { value: "fixed", label: "Fixed Size" },
+  { value: "sentence", label: "Sentence-Based" },
+  { value: "semantic", label: "Semantic" },
 ];
 
-export default function DocumentUpload({ onUploadComplete, inline = false }) {
+export default function DocumentUpload({ onClose, onUploadComplete }) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState("");
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState("");
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [chunkStrategy, setChunkStrategy] = useState("recursive");
   const [chunkSize, setChunkSize] = useState(1000);
   const [chunkOverlap, setChunkOverlap] = useState(200);
@@ -79,11 +79,7 @@ export default function DocumentUpload({ onUploadComplete, inline = false }) {
       progressValue += 2;
       if (progressValue > 90) progressValue = 90;
       setProgress(progressValue);
-
-      const stepIdx = Math.min(
-        Math.floor(progressValue / 25),
-        steps.length - 1
-      );
+      const stepIdx = Math.min(Math.floor(progressValue / 25), steps.length - 1);
       setCurrentStep(steps[stepIdx]);
     }, 200);
 
@@ -112,12 +108,8 @@ export default function DocumentUpload({ onUploadComplete, inline = false }) {
       setCurrentStep("done");
 
       setTimeout(() => {
-        setUploading(false);
-        setProgress(0);
-        setCurrentStep("");
-        setFileName("");
         onUploadComplete(result);
-      }, 800);
+      }, 600);
     } catch (err) {
       clearInterval(progressInterval);
       setError(err.message);
@@ -129,133 +121,117 @@ export default function DocumentUpload({ onUploadComplete, inline = false }) {
   };
 
   return (
-    <div className={`upload-zone ${inline ? "inline" : ""}`}>
-      {error && <div className="error-toast">{error}</div>}
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        {error && <div className="error-toast">{error}</div>}
 
-      <div
-        className={`upload-dropzone ${isDragging ? "dragging" : ""}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={() => !uploading && fileInputRef.current?.click()}
-        id="upload-dropzone"
-      >
-        <div className="upload-dropzone-content">
-          <span className="upload-icon">📄</span>
-          <p className="upload-text">
-            <strong>Drop a file here</strong> or click to browse
-          </p>
-          <p className="upload-hint">Supports PDF and TXT files (max 10MB)</p>
+        <div className="modal-header">
+          <div className="modal-title">Upload Document</div>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="upload-input"
-          accept=".pdf,.txt,application/pdf,text/plain"
-          onChange={handleFileSelect}
-          id="file-upload-input"
-        />
-      </div>
 
-      <button
-        className="rag-toggle-btn"
-        onClick={() => setShowAdvanced(!showAdvanced)}
-        type="button"
-      >
-        <span>{showAdvanced ? "▼" : "▶"}</span>
-        Advanced Chunking Settings
-      </button>
-
-      {showAdvanced && (
-        <div className="rag-settings-panel">
-          <div className="rag-setting-row">
-            <label className="rag-setting-label">Chunking Strategy</label>
-            <select
-              className="rag-setting-select"
-              value={chunkStrategy}
-              onChange={(e) => setChunkStrategy(e.target.value)}
-            >
-              {CHUNK_STRATEGIES.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
-            <p className="rag-setting-desc">
-              {CHUNK_STRATEGIES.find(s => s.value === chunkStrategy)?.desc}
+        <div
+          className={`upload-dropzone ${isDragging ? "dragging" : ""}`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => !uploading && fileInputRef.current?.click()}
+        >
+          <div className="upload-dropzone-content">
+            <span className="upload-icon">📄</span>
+            <p className="upload-text">
+              <strong>Drop a file here</strong> or click to browse
             </p>
+            <p className="upload-hint">PDF and TXT · Max 10MB</p>
           </div>
-
-          <div className="rag-setting-row">
-            <label className="rag-setting-label">
-              Chunk Size: {chunkSize} chars
-            </label>
-            <input
-              type="range"
-              className="rag-setting-slider"
-              min={200}
-              max={2000}
-              step={100}
-              value={chunkSize}
-              onChange={(e) => setChunkSize(Number(e.target.value))}
-            />
-          </div>
-
-          <div className="rag-setting-row">
-            <label className="rag-setting-label">
-              Overlap: {chunkOverlap} chars
-            </label>
-            <input
-              type="range"
-              className="rag-setting-slider"
-              min={0}
-              max={500}
-              step={50}
-              value={chunkOverlap}
-              onChange={(e) => setChunkOverlap(Number(e.target.value))}
-            />
-          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="upload-input"
+            accept=".pdf,.txt,application/pdf,text/plain"
+            onChange={handleFileSelect}
+          />
         </div>
-      )}
 
-      {uploading && (
-        <div className="upload-progress">
-          <div className="upload-progress-header">
-            <span className="upload-progress-filename">{fileName}</span>
-            <span className="upload-progress-status">
-              {currentStep === "done" ? "✓ Complete" : "Processing..."}
-            </span>
-          </div>
-          <div className="upload-progress-bar">
-            <div
-              className="upload-progress-fill"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <div className="upload-progress-steps">
-            {UPLOAD_STEPS.map((step) => {
-              const stepIdx = UPLOAD_STEPS.findIndex(
-                (s) => s.id === step.id
-              );
-              const currentIdx = UPLOAD_STEPS.findIndex(
-                (s) => s.id === currentStep
-              );
-              const isDone =
-                currentStep === "done" || stepIdx < currentIdx;
-              const isActive = step.id === currentStep;
+        <div className="settings-section">
+          <button
+            className="settings-toggle-btn"
+            onClick={() => setShowSettings(!showSettings)}
+          >
+            {showSettings ? "−" : "+"} Chunking Settings
+          </button>
 
-              return (
-                <span
-                  key={step.id}
-                  className={`upload-step ${isDone ? "done" : ""} ${
-                    isActive ? "active" : ""
-                  }`}
+          {showSettings && (
+            <div className="settings-panel">
+              <div className="setting-row">
+                <label className="setting-label">Strategy</label>
+                <select
+                  className="setting-select"
+                  value={chunkStrategy}
+                  onChange={(e) => setChunkStrategy(e.target.value)}
                 >
-                  {isDone ? "✓" : isActive ? "⟳" : "○"} {step.label}
-                </span>
-              );
-            })}
-          </div>
+                  {CHUNK_STRATEGIES.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="setting-row">
+                <label className="setting-label">Chunk Size: {chunkSize} chars</label>
+                <input
+                  type="range"
+                  className="setting-slider"
+                  min={200}
+                  max={2000}
+                  step={100}
+                  value={chunkSize}
+                  onChange={(e) => setChunkSize(Number(e.target.value))}
+                />
+              </div>
+
+              <div className="setting-row">
+                <label className="setting-label">Overlap: {chunkOverlap} chars</label>
+                <input
+                  type="range"
+                  className="setting-slider"
+                  min={0}
+                  max={500}
+                  step={50}
+                  value={chunkOverlap}
+                  onChange={(e) => setChunkOverlap(Number(e.target.value))}
+                />
+              </div>
+            </div>
+          )}
         </div>
-      )}
+
+        {uploading && (
+          <div className="upload-progress">
+            <div className="upload-progress-header">
+              <span className="upload-progress-filename">{fileName}</span>
+              <span className="upload-progress-status">
+                {currentStep === "done" ? "Complete" : "Processing..."}
+              </span>
+            </div>
+            <div className="upload-progress-bar">
+              <div className="upload-progress-fill" style={{ width: `${progress}%` }} />
+            </div>
+            <div className="upload-progress-steps">
+              {UPLOAD_STEPS.map((step) => {
+                const stepIdx = UPLOAD_STEPS.findIndex((s) => s.id === step.id);
+                const currentIdx = UPLOAD_STEPS.findIndex((s) => s.id === currentStep);
+                const isDone = currentStep === "done" || stepIdx < currentIdx;
+                const isActive = step.id === currentStep;
+                return (
+                  <span key={step.id} className={`upload-step ${isDone ? "done" : ""} ${isActive ? "active" : ""}`}>
+                    {isDone ? "✓" : isActive ? "○" : "○"} {step.label}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
