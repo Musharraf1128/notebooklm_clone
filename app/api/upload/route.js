@@ -50,10 +50,18 @@ export async function POST(request) {
       );
     }
 
-    // Step 1: Parse the document
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const fileType = file.type || fileExtension;
-    const parsedDoc = await processFile(buffer, fileType);
+    let parsedDoc;
+    try {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const fileType = file.type || fileExtension;
+      parsedDoc = await processFile(buffer, fileType);
+    } catch (parseErr) {
+      console.error("Parse error:", parseErr);
+      return NextResponse.json(
+        { error: `Parse error: ${parseErr.message}` },
+        { status: 500 }
+      );
+    }
 
     if (!parsedDoc.text || parsedDoc.text.trim().length === 0) {
       return NextResponse.json(
@@ -62,25 +70,23 @@ export async function POST(request) {
       );
     }
 
-    // Step 2: Chunk the document (supports strategy selection)
     let chunks;
-    if (chunkingStrategy === "semantic") {
-      chunks = await chunkDocument(parsedDoc.text, file.name, {
-        strategy: chunkingStrategy,
-        chunkSize,
-        chunkOverlap,
-      });
-    } else {
+    try {
       chunks = chunkDocument(parsedDoc.text, file.name, {
         strategy: chunkingStrategy,
         chunkSize,
         chunkOverlap,
       });
-    }
 
-    // Handle both sync and async chunkDocument returns
-    if (chunks instanceof Promise) {
-      chunks = await chunks;
+      if (chunks instanceof Promise) {
+        chunks = await chunks;
+      }
+    } catch (chunkErr) {
+      console.error("Chunk error:", chunkErr);
+      return NextResponse.json(
+        { error: `Chunk error: ${chunkErr.message}` },
+        { status: 500 }
+      );
     }
 
     if (!chunks || chunks.length === 0) {
@@ -90,22 +96,37 @@ export async function POST(request) {
       );
     }
 
-    // Step 3: Generate embeddings
-    const texts = chunks.map((chunk) => chunk.text);
-    const embeddings = await embedTexts(texts);
+    let embeddings;
+    try {
+      const texts = chunks.map((chunk) => chunk.text);
+      embeddings = await embedTexts(texts);
+    } catch (embedErr) {
+      console.error("Embedding error:", embedErr);
+      return NextResponse.json(
+        { error: `Embedding error: ${embedErr.message}` },
+        { status: 500 }
+      );
+    }
 
-    // Step 4: Store in Qdrant
-    const sanitizedName = file.name
-      .replace(/[^a-zA-Z0-9]/g, "_")
-      .replace(/_+/g, "_")
-      .replace(/^_|_$/g, "")
-      .toLowerCase()
-      .slice(0, 40);
+    try {
+      const sanitizedName = file.name
+        .replace(/[^a-zA-Z0-9]/g, "_")
+        .replace(/_+/g, "_")
+        .replace(/^_|_$/g, "")
+        .toLowerCase()
+        .slice(0, 40);
 
-    const collectionName = `doc_${sanitizedName}_${Date.now()}`;
+      const collectionName = `doc_${sanitizedName}_${Date.now()}`;
 
-    await createCollection(collectionName, embeddings[0].length);
-    await upsertVectors(collectionName, embeddings, chunks);
+      await createCollection(collectionName, embeddings[0].length);
+      await upsertVectors(collectionName, embeddings, chunks);
+    } catch (storeErr) {
+      console.error("Storage error:", storeErr);
+      return NextResponse.json(
+        { error: `Storage error: ${storeErr.message}` },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
