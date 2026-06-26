@@ -108,15 +108,16 @@ export async function POST(request) {
       );
     }
 
-    try {
-      const sanitizedName = file.name
-        .replace(/[^a-zA-Z0-9]/g, "_")
-        .replace(/_+/g, "_")
-        .replace(/^_|_$/g, "")
-        .toLowerCase()
-        .slice(0, 40);
+    const sanitizedName = file.name
+      .replace(/[^a-zA-Z0-9]/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_|_$/g, "")
+      .toLowerCase()
+      .slice(0, 40);
 
-      const collectionName = `doc_${sanitizedName}_${Date.now()}`;
+    const collectionName = `doc_${sanitizedName}_${Date.now()}`;
+
+    try {
 
       await createCollection(collectionName, embeddings[0].length);
       await upsertVectors(collectionName, embeddings, chunks);

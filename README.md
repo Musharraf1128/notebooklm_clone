@@ -2,7 +2,7 @@
 
 A full-stack RAG (Retrieval-Augmented Generation) application inspired by Google NotebookLM. Upload any PDF or text document and have an AI-powered conversation with it — answers are grounded in the document's actual content, not hallucinated.
 
-**Live Demo:** [notebooklm-clone-ten.vercel.app](https://notebooklm-clone-ten.vercel.app)  
+**Live Demo:** [notebooklm-clone-ten.vercel.app](https://notebooklm-clone-ten.vercel.app)
 **Repository:** [github.com/Musharraf1128/notebooklm_clone](https://github.com/Musharraf1128/notebooklm_clone)
 
 ---
@@ -154,6 +154,7 @@ The retrieved chunks are injected into the LLM system prompt as context. The pro
    ```bash
    npm run dev
    ```
+
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
